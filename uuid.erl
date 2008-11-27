@@ -1,9 +1,6 @@
-%% @author Travis Vachon
 %% @author Andrew Kreiling <akreiling@pobox.com>
-%% @copyright
-%%      2008 Travis Vachon,
-%%      2008 Andrew Kreiling <akreiling@pobox.com>.
-%%  All Rights Reserved.
+%% @copyright 2008 Andrew Kreiling <akreiling@pobox.com>. All Rights Reserved.
+%%
 %% @doc
 %% UUID module for Erlang
 %%
@@ -11,9 +8,8 @@
 %% conforms to RFC 4122 whenever possible.
 %%
 -module(uuid).
--author('Travis Vachon').
 -author('Andrew Kreiling <akreiling@pobox.com>').
--export([v4/0, random/0, srandom/0, sha/2, md5/2, to_string/1]).
+-export([v4/0, random/0, srandom/0, sha/2, md5/2, timestamp/2, to_string/1]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -85,6 +81,18 @@ md5(Namespace, Name) ->
     U = crypto:md5_final(Context),
     format_uuid(U, 3).
 
+%% @spec timestamp(Node, CS) -> uuid()
+%% where
+%%      Node = int()
+%%      CS = int()
+%% @doc
+%% Generates a UUID based on timestamp
+%%
+timestamp(Node, CS) ->
+    {MegaSecs, Secs, MicroSecs} = erlang:now(),
+    T = (((((MegaSecs * 1000000) + Secs) * 1000000) + MicroSecs) * 10) + 16#01b21dd213814000,
+    format_uuid(T band 16#ffffffff, (T bsr 32) band 16#ffff, (T bsr 48) band 16#ffff, (CS bsr 8) band 16#ff, CS band 16#ff, Node, 1).
+
 %% @spec to_string(UUID) -> string()
 %% where
 %%      UUID = uuid()
@@ -101,7 +109,10 @@ namespace(x500) -> ?UUID_X500_NAMESPACE;
 namespace(UUID) when is_binary(UUID) -> UUID;
 namespace(_) -> error.
 
+format_uuid(TL, TM, THV, CSR, CSL, N, V) ->
+    format_uuid(<<TL:32, TM:16, THV:16, CSR:8, CSL:8, N:48>>, V).
+
 format_uuid(<<TL:32, TM:16, THV:16, CSR:8, CSL:8, N:48, _Rest/binary>>, V) ->
     <<TL:32, TM:16, ((THV band 16#0fff) bor (V bsl 12)):16, ((CSR band 16#3f) bor 16#80):8, CSL:8, N:48>>.
 
-%% vim:sw=4:sts=4:ts=4:et
+%% vim:sw=4:sts=4:ts=8:et

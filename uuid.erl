@@ -9,16 +9,22 @@
 %%
 -module(uuid).
 -author('Andrew Kreiling <akreiling@pobox.com>').
--export([v4/0, random/0, srandom/0, sha/2, md5/2, timestamp/2, to_string/1]).
+-behaviour(gen_server).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+-export([start/0, start/1, start_link/0, start_link/1]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([v4/0, random/0, srandom/0, sha/2, md5/2, timestamp/2, to_string/1]).
+
 -define(UUID_DNS_NAMESPACE, <<107,167,184,16,157,173,17,209,128,180,0,192,79,212,48,200>>).
 -define(UUID_URL_NAMESPACE, <<107,167,184,17,157,173,17,209,128,180,0,192,79,212,48,200>>).
 -define(UUID_OID_NAMESPACE, <<107,167,184,18,157,173,17,209,128,180,0,192,79,212,48,200>>).
 -define(UUID_X500_NAMESPACE, <<107,167,184,20,157,173,17,209,128,180,0,192,79,212,48,200>>).
+
+-record(state, {node, clock_seq}).
 
 %% @type uuid() = binary(). A binary representation of a UUID
 
@@ -47,7 +53,7 @@ random() ->
 %% Seeds random number generation with erlang:now() and generates a random UUID
 %%
 srandom() ->
-    {A1,A2,A3} = now(),
+    {A1,A2,A3} = erlang:now(),
     random:seed(A1, A2, A3),
     random().
 
@@ -83,7 +89,7 @@ md5(Namespace, Name) ->
 
 %% @spec timestamp(Node, CS) -> uuid()
 %% where
-%%      Node = int()
+%%      Node = binary()
 %%      CS = int()
 %% @doc
 %% Generates a UUID based on timestamp
@@ -102,12 +108,67 @@ timestamp(Node, CS) ->
 to_string(<<TL:32, TM:16, THV:16, CSR:8, CSL:8, N:48>> = _UUID) ->
     lists:flatten(io_lib:format("~8.16.0b-~4.16.0b-~4.16.0b-~2.16.0b~2.16.0b-~12.16.0b", [TL, TM, THV, CSR, CSL, N])).
 
+%%
+%% uuid gen_server for generating timestamps with saved state
+%%
+
+start() ->
+    start([]).
+
+start(Args) ->
+    gen_server:start({local, ?MODULE}, ?MODULE, Args, []).
+
+start_link() ->
+    start_link([]).
+
+start_link(Args) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
+
+init(Options) ->
+    {A1,A2,A3} = proplists:get_value(seed, Options, erlang:now()),
+    random:seed(A1, A2, A3),
+    State = #state{
+        node = proplists:get_value(node, Options, <<0:48>>),
+        clock_seq = random:uniform(65536)
+    },
+    {ok, State}.
+
+handle_call(timestamp, _From, State) ->
+    Reply = timestamp(State#state.node, State#state.clock_seq),
+    {reply, Reply, State};
+
+handle_call(_Request, _From, State) ->
+    Reply = ok,
+    {reply, Reply, State}.
+
+handle_cast(stop, State) ->
+    {stop, normal, State};
+
+handle_cast(_Msg, State) ->
+    {noreply, State}.
+
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+%%
+%% Internal API
+%%
+
 namespace(dns) -> ?UUID_DNS_NAMESPACE;
 namespace(url) -> ?UUID_URL_NAMESPACE;
 namespace(oid) -> ?UUID_OID_NAMESPACE;
 namespace(x500) -> ?UUID_X500_NAMESPACE;
 namespace(UUID) when is_binary(UUID) -> UUID;
 namespace(_) -> error.
+
+format_uuid(TL, TM, THV, CSR, CSL, <<N:48>>, V) ->
+    format_uuid(<<TL:32, TM:16, THV:16, CSR:8, CSL:8, N:48>>, V);
 
 format_uuid(TL, TM, THV, CSR, CSL, N, V) ->
     format_uuid(<<TL:32, TM:16, THV:16, CSR:8, CSL:8, N:48>>, V).

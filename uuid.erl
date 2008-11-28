@@ -15,7 +15,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--export([start/0, start/1, start_link/0, start_link/1]).
+-export([start/0, start/1, start_link/0, start_link/1, stop/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([v4/0, random/0, srandom/0, sha/2, md5/2, timestamp/0, timestamp/2, to_string/1]).
 
@@ -134,6 +134,9 @@ start_link() ->
 start_link(Args) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, Args, []).
 
+stop() ->
+    gen_server:cast(?SERVER, stop).
+
 init(Options) ->
     {A1,A2,A3} = proplists:get_value(seed, Options, erlang:now()),
     random:seed(A1, A2, A3),
@@ -141,6 +144,7 @@ init(Options) ->
         node = proplists:get_value(node, Options, <<0:48>>),
         clock_seq = random:uniform(65536)
     },
+    error_logger:info_report("uuid server started"),
     {ok, State}.
 
 handle_call(timestamp, _From, State) ->
@@ -161,6 +165,7 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
+    error_logger:info_report("uuid server stopped"),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->

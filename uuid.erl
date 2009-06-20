@@ -42,10 +42,10 @@ v4() ->
 %%
 random() ->
     U = <<
-    (random:uniform(4294967295)):32,
-    (random:uniform(4294967295)):32,
-    (random:uniform(4294967295)):32,
-    (random:uniform(4294967295)):32
+        (random:uniform(4294967296) - 1):32,
+        (random:uniform(4294967296) - 1):32,
+        (random:uniform(4294967296) - 1):32,
+        (random:uniform(4294967296) - 1):32
     >>,
     format_uuid(U, 4).
 

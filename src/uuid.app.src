@@ -6,7 +6,8 @@
   {modules, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  crypto
                  ]},
   {env, []}
  ]}.
